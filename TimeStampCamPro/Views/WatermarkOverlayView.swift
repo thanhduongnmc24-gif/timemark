@@ -1,127 +1,159 @@
 import SwiftUI
 
-/// Khung hiển thị Watermark trực tiếp trên màn hình giống hệt ảnh mẫu Hòa Phát Gang Thép
+/// Khung hiển thị biểu mẫu (Watermark) trực tiếp trên màn hình:
+/// - Hỗ trợ **chụm 2 ngón tay (Pinch)** để phóng to / thu nhỏ biểu mẫu
+/// - Hỗ trợ **nhấn giữ và kéo (Drag)** để di chuyển biểu mẫu tới bất kỳ vị trí nào trên màn hình
 struct WatermarkOverlayView: View {
     @EnvironmentObject var store: WatermarkStore
+    let containerSize: CGSize
     let onTapEdit: () -> Void
     let onTapLocation: () -> Void
 
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            // Khối bên trái: Logo + Giờ/Ngày/Thứ + Khung mờ ghi chú Tổ vận hành
-            VStack(alignment: .leading, spacing: 5) {
-                // 1. Logo (Hòa Phát Gang Thép / Tùy chỉnh)
-                logoView
+    @State private var activeDragTranslation: CGSize = .zero
+    @State private var activePinchScale: CGFloat = 1.0
 
-                // 2. Hàng Giờ lớn (21:55) + Vạch cam + Ngày (26/10/2026) & Thứ (Thứ Hai)
-                HStack(alignment: .center, spacing: 9) {
-                    Text(store.timeText)
-                        .font(.custom("DINCondensed-Bold", size: 46 * store.watermarkScale))
-                        .foregroundColor(.white)
-                        .shadow(color: Color.black.opacity(0.55), radius: 2, x: 0, y: 1)
-                        .fixedSize()
-
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(store.barColor.swiftUIColor)
-                        .frame(width: 2.5, height: 34 * store.watermarkScale)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(store.dateText)
-                            .font(.system(size: 13.5 * store.watermarkScale, weight: .medium))
-                            .foregroundColor(.white.opacity(0.96))
-                            .shadow(color: Color.black.opacity(0.5), radius: 1.5, x: 0, y: 1)
-
-                        Text(store.weekdayText)
-                            .font(.system(size: 13.5 * store.watermarkScale, weight: .regular))
-                            .foregroundColor(.white.opacity(0.94))
-                            .shadow(color: Color.black.opacity(0.5), radius: 1.5, x: 0, y: 1)
-                    }
-                }
-
-                // 3. Khung mờ chứa dòng ghi chú Tổ vận hành / Kíp / Địa điểm
-                if hasNoteContent {
-                    VStack(alignment: .leading, spacing: 3) {
-                        if !store.noteLine1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(store.noteLine1)
-                                .font(.system(size: 13.5 * store.watermarkScale, weight: .regular))
-                                .foregroundColor(.white.opacity(0.95))
-                        }
-                        if !store.noteLine2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(store.noteLine2)
-                                .font(.system(size: 12.5 * store.watermarkScale, weight: .regular))
-                                .foregroundColor(.white.opacity(0.90))
-                        }
-                        if store.showLocationLine && !store.locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "location.fill")
-                                    .font(.system(size: 10 * store.watermarkScale))
-                                Text(store.locationText)
-                                    .font(.system(size: 12 * store.watermarkScale, weight: .regular))
-                            }
-                            .foregroundColor(.white.opacity(0.90))
-                        }
-                    }
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 7.5)
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color(white: 0.42).opacity(0.75),
-                                Color(white: 0.22).opacity(0.45)
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture {
-                onTapEdit()
-            }
-
-            Spacer(minLength: 8)
-
-            // Cột nút bên phải: Nút Sửa nhanh (square.and.pencil) & Nút Định vị tâm ngắm (scope)
-            VStack(spacing: 18) {
-                Button(action: onTapEdit) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 23, weight: .medium))
-                        .foregroundColor(.white)
-                        .shadow(color: Color.black.opacity(0.6), radius: 2, x: 0, y: 1)
-                        .frame(width: 36, height: 36)
-                }
-
-                Button(action: onTapLocation) {
-                    ZStack {
-                        Circle()
-                            .stroke(Color.white, lineWidth: 2)
-                            .frame(width: 22, height: 22)
-                        Circle()
-                            .fill(Color.white)
-                            .frame(width: 6, height: 6)
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(width: 2, height: 30)
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(width: 30, height: 2)
-                    }
-                    .shadow(color: Color.black.opacity(0.6), radius: 2, x: 0, y: 1)
-                    .frame(width: 36, height: 36)
-                }
-            }
-            .padding(.bottom, 2)
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 12)
+    private var effectiveScale: Double {
+        let combined = store.watermarkScale * Double(activePinchScale)
+        return max(0.5, min(combined, 2.2))
     }
 
-    private var hasNoteContent: Bool {
-        !store.noteLine1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        !store.noteLine2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-        (store.showLocationLine && !store.locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    private var currentDragOffset: CGSize {
+        let dx = CGFloat(store.normalizedOffsetX) * max(containerSize.width, 1) + activeDragTranslation.width
+        let dy = CGFloat(store.normalizedOffsetY) * max(containerSize.height, 1) + activeDragTranslation.height
+        return CGSize(width: dx, height: dy)
+    }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            HStack(alignment: .bottom, spacing: 8) {
+                // KHỐI BIỂU MẪU (Logo Hòa Phát + Giờ 22:26 + Vạch cam + 26/10/2026 + Thứ Hai + Khung mờ Kíp vận hành)
+                VStack(alignment: .leading, spacing: 5 * effectiveScale) {
+                    // 1. Logo Hòa Phát Gang Thép (đã xóa nền + viền trắng chuẩn mẫu)
+                    if store.showLogo {
+                        logoView
+                    }
+
+                    // 2. Hàng Giờ lớn (22:26) + Vạch cam + Ngày (26/10/2026) & Thứ (Thứ Hai)
+                    if store.showTimeBlock {
+                        HStack(alignment: .center, spacing: 9 * effectiveScale) {
+                            Text(store.timeText)
+                                .font(.custom("DINCondensed-Bold", size: 46 * effectiveScale))
+                                .foregroundColor(.white)
+                                .shadow(color: Color.black.opacity(0.55), radius: 2, x: 0, y: 1)
+                                .fixedSize()
+
+                            RoundedRectangle(cornerRadius: 1.5)
+                                .fill(store.barColor.swiftUIColor)
+                                .frame(width: 2.5 * effectiveScale, height: 34 * effectiveScale)
+
+                            VStack(alignment: .leading, spacing: 4 * effectiveScale) {
+                                Text(store.dateText)
+                                    .font(.system(size: 13.5 * effectiveScale, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.96))
+                                    .shadow(color: Color.black.opacity(0.5), radius: 1.5, x: 0, y: 1)
+
+                                Text(store.weekdayText)
+                                    .font(.system(size: 13.5 * effectiveScale, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.94))
+                                    .shadow(color: Color.black.opacity(0.5), radius: 1.5, x: 0, y: 1)
+                            }
+                        }
+                    }
+
+                    // 3. Khung mờ chứa các dòng ghi chú đang bật (Tổ Vận hành - Kíp A X.CT1, văn bản thêm, tọa độ...)
+                    let lines = store.activeNoteLines
+                    if !lines.isEmpty {
+                        VStack(alignment: .leading, spacing: 3.5 * effectiveScale) {
+                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.system(size: 13.5 * effectiveScale, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.95))
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                        .padding(.horizontal, 11 * effectiveScale)
+                        .padding(.vertical, 7.5 * effectiveScale)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color(white: 0.40).opacity(0.76),
+                                    Color(white: 0.20).opacity(0.46)
+                                ]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 6 * effectiveScale, style: .continuous))
+                    }
+                }
+                .contentShape(Rectangle())
+                .offset(currentDragOffset)
+                .onTapGesture {
+                    onTapEdit()
+                }
+                .gesture(
+                    SimultaneousGesture(
+                        DragGesture()
+                            .onChanged { value in
+                                activeDragTranslation = value.translation
+                            }
+                            .onEnded { value in
+                                let w = max(containerSize.width, 1)
+                                let h = max(containerSize.height, 1)
+                                let newNormX = store.normalizedOffsetX + Double(value.translation.width / w)
+                                let newNormY = store.normalizedOffsetY + Double(value.translation.height / h)
+                                store.normalizedOffsetX = max(-0.45, min(0.65, newNormX))
+                                store.normalizedOffsetY = max(-0.75, min(0.20, newNormY))
+                                activeDragTranslation = .zero
+                            },
+                        MagnificationGesture()
+                            .onChanged { scale in
+                                activePinchScale = scale
+                            }
+                            .onEnded { scale in
+                                let updated = store.watermarkScale * Double(scale)
+                                store.watermarkScale = max(0.5, min(updated, 2.2))
+                                activePinchScale = 1.0
+                            }
+                    )
+                )
+
+                Spacer(minLength: 8)
+
+                // Cột nút tác vụ nhanh bên phải: Nút Sửa nhanh (square.and.pencil) & Nút Định vị tâm ngắm
+                VStack(spacing: 18) {
+                    Button(action: onTapEdit) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 23, weight: .medium))
+                            .foregroundColor(.white)
+                            .shadow(color: Color.black.opacity(0.6), radius: 2, x: 0, y: 1)
+                            .frame(width: 36, height: 36)
+                    }
+
+                    Button(action: onTapLocation) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2)
+                                .frame(width: 22, height: 22)
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 6, height: 6)
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: 2, height: 30)
+                            Rectangle()
+                                .fill(Color.white)
+                                .frame(width: 30, height: 2)
+                        }
+                        .shadow(color: Color.black.opacity(0.6), radius: 2, x: 0, y: 1)
+                        .frame(width: 36, height: 36)
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 14)
+        }
     }
 
     @ViewBuilder
@@ -132,24 +164,24 @@ struct WatermarkOverlayView: View {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 25 * store.watermarkScale)
+                    .frame(height: 22 * effectiveScale)
             } else {
-                CustomTextBadgeLogoView(title: "HOA PHAT", subtitle: "GANG THÉP", scale: store.watermarkScale)
+                CustomTextBadgeLogoView(title: "HÒA PHÁT", subtitle: "GANG THÉP", scale: effectiveScale)
             }
         case .customText:
             CustomTextBadgeLogoView(
                 title: store.customLogoTitle,
                 subtitle: store.customLogoSubtitle,
-                scale: store.watermarkScale
+                scale: effectiveScale
             )
         case .customImage:
             if let customImg = store.customLogoUIImage {
                 Image(uiImage: customImg)
                     .resizable()
                     .scaledToFit()
-                    .frame(height: 28 * store.watermarkScale)
+                    .frame(height: 26 * effectiveScale)
             } else {
-                CustomTextBadgeLogoView(title: "LOGO", subtitle: "CHỌN ẢNH", scale: store.watermarkScale)
+                CustomTextBadgeLogoView(title: "LOGO", subtitle: "CHỌN ẢNH", scale: effectiveScale)
             }
         case .hidden:
             EmptyView()
@@ -157,23 +189,19 @@ struct WatermarkOverlayView: View {
     }
 }
 
-/// Logo dạng huy hiệu viền trắng + chữ xanh giống logo Hòa Phát khi người dùng đổi tên công ty
 struct CustomTextBadgeLogoView: View {
     let title: String
     let subtitle: String
     let scale: Double
 
-    private let hpBlue = Color(red: 0.0, green: 0.40, blue: 0.70)
+    private let hpBlue = Color(red: 0.0, green: 0.32, blue: 0.62)
 
     var body: some View {
         HStack(spacing: 4) {
-            // Biểu tượng tam giác 3 mũi tên xanh Hòa Phát
-            ZStack {
-                Image(systemName: "arrowtriangle.up.fill")
-                    .font(.system(size: 13 * scale, weight: .bold))
-                    .foregroundColor(hpBlue)
-            }
-            .frame(width: 18 * scale, height: 18 * scale)
+            Image(systemName: "arrowtriangle.up.fill")
+                .font(.system(size: 13 * scale, weight: .bold))
+                .foregroundColor(hpBlue)
+                .frame(width: 18 * scale, height: 18 * scale)
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(title)

@@ -34,19 +34,21 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.0</string>
+	<string>1.1.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Ứng dụng cần quyền truy cập Camera để chụp ảnh trực tiếp và đóng dấu thời gian, ca làm việc lên ảnh.</string>
+	<string>Ứng dụng cần quyền truy cập Camera để chụp ảnh và quay video trực tiếp kèm đóng dấu thời gian.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Ứng dụng cần quyền truy cập Micro để thu âm thanh khi quay video đóng dấu thời gian.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Ứng dụng cần quyền truy cập Thư viện ảnh để bạn chọn ảnh có sẵn và lưu ảnh đã đóng dấu thời gian.</string>
+	<string>Ứng dụng cần quyền truy cập Thư viện ảnh để bạn chọn ảnh có sẵn và lưu ảnh/video đã đóng dấu thời gian.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Ứng dụng cần quyền lưu ảnh đã đóng dấu thời gian vào Thư viện ảnh của bạn.</string>
+	<string>Ứng dụng cần quyền lưu ảnh và video đã đóng dấu thời gian vào Thư viện của bạn.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Ứng dụng cần quyền truy cập Vị trí để tự động lấy địa chỉ hoặc tọa độ GPS chèn vào bản mẫu báo cáo công việc.</string>
+	<string>Ứng dụng cần quyền truy cập Vị trí để tự động lấy địa chỉ, tọa độ GPS và độ cao chèn vào bản mẫu.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

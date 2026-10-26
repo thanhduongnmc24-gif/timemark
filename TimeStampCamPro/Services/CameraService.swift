@@ -3,6 +3,11 @@ import AVFoundation
 import UIKit
 import SwiftUI
 
+enum CaptureMode: String, CaseIterable {
+    case photo = "ẢNH"
+    case video = "VIDEO"
+}
+
 final class CameraService: NSObject, ObservableObject {
     @Published var isAuthorized: Bool = false
     @Published var isFlashOn: Bool = false
@@ -11,11 +16,20 @@ final class CameraService: NSObject, ObservableObject {
     @Published var capturedImage: UIImage? = nil
     @Published var cameraErrorMessage: String? = nil
 
+    // Trạng thái quay phim (Video)
+    @Published var isRecordingVideo: Bool = false
+    @Published var recordingSeconds: Int = 0
+
     let session = AVCaptureSession()
     private let sessionQueue = DispatchQueue(label: "com.timestampcam.pro.camera.queue")
     private let photoOutput = AVCapturePhotoOutput()
+    private let movieOutput = AVCaptureMovieFileOutput()
     private var currentVideoInput: AVCaptureDeviceInput?
+    private var currentAudioInput: AVCaptureDeviceInput?
+
     private var photoCaptureCompletion: ((UIImage?) -> Void)?
+    private var videoRecordingCompletion: ((URL?) -> Void)?
+    private var recordingTimer: Timer?
 
     override init() {
         super.init()
@@ -28,6 +42,7 @@ final class CameraService: NSObject, ObservableObject {
             DispatchQueue.main.async {
                 self.isAuthorized = true
             }
+            requestMicrophoneIfNeeded()
             setupSession()
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
@@ -36,6 +51,7 @@ final class CameraService: NSObject, ObservableObject {
                     self.isAuthorized = granted
                 }
                 if granted {
+                    self.requestMicrophoneIfNeeded()
                     self.setupSession()
                 }
             }
@@ -47,14 +63,22 @@ final class CameraService: NSObject, ObservableObject {
         }
     }
 
+    private func requestMicrophoneIfNeeded() {
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            AVCaptureDevice.requestAccess(for: .audio) { _ in }
+        }
+    }
+
     private func setupSession() {
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
             self.session.beginConfiguration()
-            self.session.sessionPreset = .photo
+            if self.session.canSetSessionPreset(.high) {
+                self.session.sessionPreset = .high
+            }
 
             let position: AVCaptureDevice.Position = self.isUsingFrontCamera ? .front : .back
-            guard let device = Self.bestCameraDevice(for: position) else {
+            guard let videoDevice = Self.bestCameraDevice(for: position) else {
                 self.session.commitConfiguration()
                 DispatchQueue.main.async {
                     self.cameraErrorMessage = "Không tìm thấy thiết bị Camera."
@@ -63,18 +87,31 @@ final class CameraService: NSObject, ObservableObject {
             }
 
             do {
-                let input = try AVCaptureDeviceInput(device: device)
+                let videoInput = try AVCaptureDeviceInput(device: videoDevice)
                 if let currentInput = self.currentVideoInput {
                     self.session.removeInput(currentInput)
                 }
-                if self.session.canAddInput(input) {
-                    self.session.addInput(input)
-                    self.currentVideoInput = input
+                if self.session.canAddInput(videoInput) {
+                    self.session.addInput(videoInput)
+                    self.currentVideoInput = videoInput
                 }
 
-                if self.session.outputs.isEmpty && self.session.canAddOutput(self.photoOutput) {
+                if self.currentAudioInput == nil,
+                   AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+                   let audioDevice = AVCaptureDevice.default(for: .audio),
+                   let audioInput = try? AVCaptureDeviceInput(device: audioDevice),
+                   self.session.canAddInput(audioInput) {
+                    self.session.addInput(audioInput)
+                    self.currentAudioInput = audioInput
+                }
+
+                if !self.session.outputs.contains(self.photoOutput) && self.session.canAddOutput(self.photoOutput) {
                     self.session.addOutput(self.photoOutput)
                     self.photoOutput.isHighResolutionCaptureEnabled = true
+                }
+
+                if !self.session.outputs.contains(self.movieOutput) && self.session.canAddOutput(self.movieOutput) {
+                    self.session.addOutput(self.movieOutput)
                 }
 
                 self.session.commitConfiguration()
@@ -109,6 +146,7 @@ final class CameraService: NSObject, ObservableObject {
     }
 
     func switchCamera() {
+        guard !isRecordingVideo else { return }
         isUsingFrontCamera.toggle()
         currentZoomFactor = 1.0
         setupSession()
@@ -116,6 +154,20 @@ final class CameraService: NSObject, ObservableObject {
 
     func toggleFlash() {
         isFlashOn.toggle()
+        sessionQueue.async { [weak self] in
+            guard let self = self,
+                  let device = self.currentVideoInput?.device,
+                  device.hasTorch else { return }
+            do {
+                try device.lockForConfiguration()
+                if self.isRecordingVideo && self.isFlashOn {
+                    try device.setTorchModeOn(level: 1.0)
+                } else {
+                    device.torchMode = .off
+                }
+                device.unlockForConfiguration()
+            } catch {}
+        }
     }
 
     func setZoom(factor: CGFloat) {
@@ -129,13 +181,10 @@ final class CameraService: NSObject, ObservableObject {
                 try device.lockForConfiguration()
                 let minZoom = device.minAvailableVideoZoomFactor
                 let maxZoom = min(device.maxAvailableVideoZoomFactor, 15.0)
-                // Map UI zoom (0.5x, 1x, 2x, 10x) safely within hardware zoom range
                 let targetZoom = max(minZoom, min(factor, maxZoom))
                 device.videoZoomFactor = targetZoom
                 device.unlockForConfiguration()
-            } catch {
-                // Ignore zoom configuration error on unsupported lens
-            }
+            } catch {}
         }
     }
 
@@ -157,6 +206,59 @@ final class CameraService: NSObject, ObservableObject {
             self.photoOutput.capturePhoto(with: settings, delegate: self)
         }
     }
+
+    func startVideoRecording(completion: @escaping (URL?) -> Void) {
+        guard session.isRunning && !movieOutput.isRecording else {
+            completion(nil)
+            return
+        }
+        self.videoRecordingCompletion = completion
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let fileURL = tempDir.appendingPathComponent("raw_video_\(Int(Date().timeIntervalSince1970)).mov")
+        try? FileManager.default.removeItem(at: fileURL)
+
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            if let connection = self.movieOutput.connection(with: .video),
+               connection.isVideoOrientationSupported {
+                connection.videoOrientation = .portrait
+            }
+            if let device = self.currentVideoInput?.device, device.hasTorch {
+                try? device.lockForConfiguration()
+                device.torchMode = self.isFlashOn ? .on : .off
+                device.unlockForConfiguration()
+            }
+            self.movieOutput.startRecording(to: fileURL, recordingDelegate: self)
+            DispatchQueue.main.async {
+                self.isRecordingVideo = true
+                self.recordingSeconds = 0
+                self.recordingTimer?.invalidate()
+                self.recordingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+                    self?.recordingSeconds += 1
+                }
+            }
+        }
+    }
+
+    func stopVideoRecording() {
+        guard movieOutput.isRecording else { return }
+        sessionQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.movieOutput.stopRecording()
+            if let device = self.currentVideoInput?.device, device.hasTorch {
+                try? device.lockForConfiguration()
+                device.torchMode = .off
+                device.unlockForConfiguration()
+            }
+        }
+    }
+
+    var formattedRecordingDuration: String {
+        let mins = recordingSeconds / 60
+        let secs = recordingSeconds % 60
+        return String(format: "%02d:%02d", mins, secs)
+    }
 }
 
 extension CameraService: AVCapturePhotoCaptureDelegate {
@@ -176,6 +278,22 @@ extension CameraService: AVCapturePhotoCaptureDelegate {
             self.capturedImage = normalized
             self.photoCaptureCompletion?(normalized)
             self.photoCaptureCompletion = nil
+        }
+    }
+}
+
+extension CameraService: AVCaptureFileOutputRecordingDelegate {
+    func fileOutput(_ output: AVCaptureFileOutput, didFinishRecordingTo outputFileURL: URL, from connections: [AVCaptureConnection], error: Error?) {
+        DispatchQueue.main.async {
+            self.recordingTimer?.invalidate()
+            self.recordingTimer = nil
+            self.isRecordingVideo = false
+            if error == nil {
+                self.videoRecordingCompletion?(outputFileURL)
+            } else {
+                self.videoRecordingCompletion?(nil)
+            }
+            self.videoRecordingCompletion = nil
         }
     }
 }
