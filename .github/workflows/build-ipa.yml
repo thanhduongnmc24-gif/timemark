@@ -87,7 +87,7 @@ jobs:
           body: |
             ### TimeStampCam Pro - Ban Build Tu Dong #${{ github.run_number }}
             - **File cai dat:** `TimeStampCamPro.ipa` (Cai qua TrollStore, ESign, Feather, Sideloadly, AltStore)
-            - **Tinh nang:** Chup anh truc tiep hoac chon anh co san (Thu vien / Tep), dong dau thoi gian, ngay thang, thu, khung ghi chu To van hanh / Kip truc va logo Hoa Phat Gang Thep.
+            - **Tinh nang:** Chup anh luu thang vao Thu vien khong can hoi lai, nut "Anh da chup" tren thanh dau ung dung cho phep chon nhieu anh va chia se nhanh qua Zalo / Facebook, dong dau thoi gian, ngay thang, thu, khung ghi chu To van hanh / Kip truc va logo Hoa Phat Gang Thep.
           files: TimeStampCamPro.ipa
           draft: false
           prerelease: false

@@ -1,6 +1,6 @@
 import SwiftUI
 import PhotosUI
-import UniformTypeIdentifiers
+import UIKit
 
 /// Bộ chọn ảnh từ Thư viện Ảnh (nút "Có sẵn")
 struct PhotoLibraryPicker: UIViewControllerRepresentable {
@@ -46,50 +46,7 @@ struct PhotoLibraryPicker: UIViewControllerRepresentable {
     }
 }
 
-/// Bộ chọn ảnh từ ứng dụng Tệp / iCloud Drive (nút "Tệp")
-struct DocumentImagePicker: UIViewControllerRepresentable {
-    @Binding var selectedImage: UIImage?
-    @Environment(\.presentationMode) private var presentationMode
-
-    func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.image], asCopy: true)
-        picker.allowsMultipleSelection = false
-        picker.delegate = context.coordinator
-        return picker
-    }
-
-    func updateUIViewController(_ uiViewController: UIDocumentPickerViewController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    final class Coordinator: NSObject, UIDocumentPickerDelegate {
-        let parent: DocumentImagePicker
-
-        init(_ parent: DocumentImagePicker) {
-            self.parent = parent
-        }
-
-        func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            parent.presentationMode.wrappedValue.dismiss()
-            guard let url = urls.first else { return }
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer {
-                if accessing { url.stopAccessingSecurityScopedResource() }
-            }
-            if let data = try? Data(contentsOf: url),
-               let image = UIImage(data: data) {
-                let normalized = image.normalizedUpOrientation()
-                DispatchQueue.main.async {
-                    self.parent.selectedImage = normalized
-                }
-            }
-        }
-    }
-}
-
-/// Bảng chia sẻ ảnh iOS (UIActivityViewController)
+/// Bảng chia sẻ ảnh iOS (UIActivityViewController) dùng cho SwiftUI sheet
 struct ShareSheetView: UIViewControllerRepresentable {
     let items: [Any]
 
@@ -98,4 +55,46 @@ struct ShareSheetView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+/// Trình hỗ trợ mở bảng Chia sẻ hệ thống iOS (Zalo, Facebook, Messenger, AirDrop...) trực tiếp trên ViewController trên cùng
+enum ShareHelper {
+    static func presentShareSheet(items: [Any]) {
+        guard !items.isEmpty else { return }
+        DispatchQueue.main.async {
+            let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            guard let topVC = topViewController() else { return }
+            if let popover = activityVC.popoverPresentationController {
+                popover.sourceView = topVC.view
+                popover.sourceRect = CGRect(
+                    x: topVC.view.bounds.midX,
+                    y: topVC.view.bounds.maxY - 60,
+                    width: 0,
+                    height: 0
+                )
+                popover.permittedArrowDirections = []
+            }
+            topVC.present(activityVC, animated: true)
+        }
+    }
+
+    private static func topViewController(base: UIViewController? = nil) -> UIViewController? {
+        let root: UIViewController? = base ?? {
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            let keyWindow = scenes
+                .flatMap { $0.windows }
+                .first { $0.isKeyWindow } ?? scenes.first?.windows.first
+            return keyWindow?.rootViewController
+        }()
+        if let nav = root as? UINavigationController {
+            return topViewController(base: nav.visibleViewController)
+        }
+        if let tab = root as? UITabBarController, let selected = tab.selectedViewController {
+            return topViewController(base: selected)
+        }
+        if let presented = root?.presentedViewController {
+            return topViewController(base: presented)
+        }
+        return root
+    }
 }

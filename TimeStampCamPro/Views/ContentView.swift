@@ -5,22 +5,21 @@ struct ContentView: View {
     @EnvironmentObject var store: WatermarkStore
     @StateObject private var cameraService = CameraService()
     @StateObject private var locationService = LocationService()
+    @StateObject private var capturedStore = CapturedPhotoStore()
 
     // Chế độ Chụp ảnh hoặc Quay phim (Video)
     @State private var captureMode: CaptureMode = .photo
 
-    // Ảnh người dùng chọn từ Thư viện ("Có sẵn") hoặc ứng dụng Tệp ("Tệp")
+    // Ảnh người dùng chọn từ Thư viện ("Có sẵn")
     @State private var selectedSourceImage: UIImage? = nil
     @State private var lastExportedImage: UIImage? = nil
     @State private var lastExportedVideoURL: URL? = nil
 
     // Các sheet & bảng trượt chức năng
     @State private var showPhotoLibraryPicker = false
-    @State private var showDocumentFilePicker = false
+    @State private var showAppGallerySheet = false
     @State private var showEditWatermarkSheet = false
     @State private var showTemplateDesignerDrawer = false
-    @State private var showShareSheet = false
-    @State private var showPreviewExportSheet = false
 
     // Phóng to / thu nhỏ và kéo ảnh nền khi đang chọn ảnh có sẵn từ máy
     @State private var imageScale: CGFloat = 1.0
@@ -41,7 +40,7 @@ struct ContentView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
-                // 1. THANH ĐIỀU KHIỂN TRÊN CÙNG (Đã bỏ nút Xác minh Ảnh & bỏ nút Tai nghe theo yêu cầu)
+                // 1. THANH ĐIỀU KHIỂN TRÊN CÙNG (Có nút mở bộ sưu tập Ảnh đã chụp để chọn nhiều ảnh & chia sẻ Zalo/Facebook)
                 topHeaderBar
 
                 // 2. KHUNG CAMERA / VIDEO / ẢNH ĐÃ CHỌN + BIỂU MẪU KÉO THẢ & CHỤM PHÓNG TO
@@ -119,7 +118,7 @@ struct ContentView: View {
                             }
                         }
 
-                        // Nút quay lại Camera trực tiếp nếu đang mở ảnh từ Thư viện/Tệp
+                        // Nút quay lại Camera trực tiếp nếu đang mở ảnh từ Thư viện ("Có sẵn")
                         if selectedSourceImage != nil {
                             VStack {
                                 HStack {
@@ -182,11 +181,11 @@ struct ContentView: View {
                     }
                 }
 
-                // 3. THANH CÔNG CỤ DƯỚI CÙNG (Đã bỏ thanh xanh D -> theo yêu cầu, thêm chuyển đổi ẢNH / VIDEO)
+                // 3. THANH CÔNG CỤ DƯỚI CÙNG (Đã xóa nút Tệp theo yêu cầu: chỉ còn Có sẵn | Nút Chụp/Quay | Bản mẫu)
                 bottomControlBar
             }
 
-            // 4. BẢNG TRƯỢT "CHỈNH SỬA MẪU" NỬA DƯỚI MÀN HÌNH (Giống hệt ảnh mẫu image_79402a.png)
+            // 4. BẢNG TRƯỢT "CHỈNH SỬA MẪU" NỬA DƯỚI MÀN HÌNH
             if showTemplateDesignerDrawer {
                 Color.black.opacity(0.28)
                     .ignoresSafeArea()
@@ -226,42 +225,12 @@ struct ContentView: View {
         .sheet(isPresented: $showPhotoLibraryPicker) {
             PhotoLibraryPicker(selectedImage: $selectedSourceImage)
         }
-        .sheet(isPresented: $showDocumentFilePicker) {
-            DocumentImagePicker(selectedImage: $selectedSourceImage)
+        .sheet(isPresented: $showAppGallerySheet) {
+            AppPhotoGallerySheet(capturedStore: capturedStore)
         }
         .sheet(isPresented: $showEditWatermarkSheet) {
             EditWatermarkSheet(locationService: locationService)
                 .environmentObject(store)
-        }
-        .sheet(isPresented: $showPreviewExportSheet) {
-            ExportedMediaPreviewSheet(
-                image: lastExportedImage,
-                videoURL: lastExportedVideoURL,
-                onSaveAgain: {
-                    if let videoURL = lastExportedVideoURL {
-                        WatermarkRenderer.saveVideoToPhotoLibrary(videoURL) { _, message in
-                            showToast(message)
-                        }
-                    } else if let img = lastExportedImage {
-                        WatermarkRenderer.saveToPhotoLibrary(img) { _, message in
-                            showToast(message)
-                        }
-                    }
-                },
-                onShare: {
-                    showPreviewExportSheet = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        showShareSheet = true
-                    }
-                }
-            )
-        }
-        .sheet(isPresented: $showShareSheet) {
-            if let videoURL = lastExportedVideoURL {
-                ShareSheetView(items: [videoURL])
-            } else if let exported = lastExportedImage {
-                ShareSheetView(items: [exported])
-            }
         }
         .onChange(of: selectedSourceImage) { newImg in
             resetImageTransform()
@@ -271,11 +240,17 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - 1. Top Header Bar (Gọn gàng: Menu | Flash | Chuyển ẢNH/VIDEO | Xoay Camera)
+    // MARK: - 1. Top Header Bar (Menu | Flash | Nút mở Ảnh đã chụp & Chia sẻ | Xoay Camera)
     private var topHeaderBar: some View {
         HStack(spacing: 0) {
             // Nút Menu 3 gạch bên trái
             Menu {
+                Button {
+                    showAppGallerySheet = true
+                } label: {
+                    Label("Ảnh đã chụp & Chia sẻ (\(capturedStore.items.count))", systemImage: "photo.stack.fill")
+                }
+
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                         showTemplateDesignerDrawer = true
@@ -311,14 +286,6 @@ struct ContentView: View {
                         systemImage: store.useRealTime ? "pause.circle" : "play.circle"
                     )
                 }
-
-                if lastExportedImage != nil || lastExportedVideoURL != nil {
-                    Button {
-                        showPreviewExportSheet = true
-                    } label: {
-                        Label("Xem lại Ảnh/Video vừa xuất", systemImage: "photo.on.rectangle.angled")
-                    }
-                }
             } label: {
                 VStack(alignment: .leading, spacing: 5) {
                     Capsule().fill(Color.black.opacity(0.85)).frame(width: 22, height: 2.2)
@@ -338,7 +305,51 @@ struct ContentView: View {
                     .foregroundColor(.black.opacity(0.85))
                     .frame(width: 40, height: 40)
             }
-            .padding(.leading, 12)
+            .padding(.leading, 8)
+
+            Spacer()
+
+            // Nút mở Bộ sưu tập các ảnh được chụp bằng ứng dụng này (Chọn nhiều ảnh & Chia sẻ Zalo, Facebook...)
+            Button {
+                showAppGallerySheet = true
+            } label: {
+                HStack(spacing: 6) {
+                    if let firstItem = capturedStore.items.first,
+                       let thumb = capturedStore.thumbnailImage(for: firstItem) {
+                        Image(uiImage: thumb)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 22, height: 22)
+                            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                    } else {
+                        Image(systemName: "photo.stack.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Color(red: 0.98, green: 0.42, blue: 0.0))
+                    }
+
+                    Text("Ảnh đã chụp")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.black.opacity(0.88))
+
+                    if !capturedStore.items.isEmpty {
+                        Text("\(capturedStore.items.count)")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color(red: 0.98, green: 0.42, blue: 0.0))
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(Color(.systemGray6))
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(Color.black.opacity(0.15), lineWidth: 1)
+                )
+            }
 
             Spacer()
 
@@ -397,7 +408,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - 3. Bottom Control Bar (Thanh chọn ẢNH / VIDEO + Có sẵn | Tệp | Nút Chụp/Quay | Bản mẫu)
+    // MARK: - 3. Bottom Control Bar (Thanh chọn ẢNH / VIDEO + Có sẵn | Nút Chụp/Quay | Bản mẫu — Đã xóa nút Tệp)
     private var bottomControlBar: some View {
         VStack(spacing: 8) {
             // Thanh chuyển đổi chế độ ẢNH / VIDEO
@@ -426,7 +437,7 @@ struct ContentView: View {
             .padding(.top, 8)
 
             HStack(spacing: 0) {
-                // Nút 1: "Có sẵn" (Chọn ảnh từ Thư viện Ảnh)
+                // Nút 1 (Bên trái): "Có sẵn" (Chọn ảnh từ Thư viện Ảnh)
                 Button {
                     showPhotoLibraryPicker = true
                 } label: {
@@ -465,33 +476,9 @@ struct ContentView: View {
                 }
                 .disabled(cameraService.isRecordingVideo)
 
-                // Nút 2: "Tệp" (Mở ảnh từ ứng dụng Tệp / iCloud Drive)
-                Button {
-                    showDocumentFilePicker = true
-                } label: {
-                    VStack(spacing: 6) {
-                        ZStack {
-                            Image(systemName: "folder")
-                                .font(.system(size: 24, weight: .regular))
-                                .foregroundColor(.black.opacity(0.85))
-                            Image(systemName: "cloud")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.black.opacity(0.85))
-                                .offset(y: 2)
-                        }
-                        .frame(width: 36, height: 36)
-
-                        Text("Tệp")
-                            .font(.system(size: 11.5, weight: .medium))
-                            .foregroundColor(.black.opacity(0.75))
-                    }
-                    .frame(width: 58)
-                }
-                .disabled(cameraService.isRecordingVideo)
-
                 Spacer()
 
-                // Nút 3 (Ở giữa): Nút Chụp Ảnh / Bắt đầu hoặc Dừng Quay Video
+                // Nút 2 (Ở giữa): Nút Chụp Ảnh / Bắt đầu hoặc Dừng Quay Video
                 Button {
                     handleShutterOrRecordAction()
                 } label: {
@@ -532,10 +519,7 @@ struct ContentView: View {
 
                 Spacer()
 
-                Color.clear
-                    .frame(width: 58, height: 1)
-
-                // Nút 4 (Bên phải): "Bản mẫu" -> Bật bảng trượt "Chỉnh sửa mẫu" giống hệt ảnh image_79402a.png
+                // Nút 3 (Bên phải): "Bản mẫu" -> Bật bảng trượt "Chỉnh sửa mẫu"
                 Button {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
                         showTemplateDesignerDrawer = true
@@ -568,7 +552,7 @@ struct ContentView: View {
                 }
                 .disabled(cameraService.isRecordingVideo)
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 20)
             .padding(.bottom, 16)
         }
         .background(Color.white)
@@ -630,7 +614,7 @@ struct ContentView: View {
         .frame(width: size.width, height: size.height)
     }
 
-    // MARK: - Actions
+    // MARK: - Actions (Lưu ngay vào Thư viện và Bộ sưu tập ứng dụng, KHÔNG hiện bảng hỏi lại)
     private func handleShutterOrRecordAction() {
         // CHẾ ĐỘ 1: QUAY PHIM (VIDEO)
         if captureMode == .video && selectedSourceImage == nil {
@@ -660,7 +644,6 @@ struct ContentView: View {
                         WatermarkRenderer.saveVideoToPhotoLibrary(finalURL) { _, message in
                             self.isProcessingCapture = false
                             self.showToast(message)
-                            self.showPreviewExportSheet = true
                         }
                     }
                 }
@@ -668,41 +651,38 @@ struct ContentView: View {
             return
         }
 
-        // CHẾ ĐỘ 2: CHỤP ẢNH HOẶC XUẤT ẢNH CÓ SẴN
+        // CHẾ ĐỘ 2: CHỤP ẢNH HOẶC XUẤT ẢNH CÓ SẴN -> LƯU NGAY LẬP TỨC, KHÔNG HỎI LẠI
         isProcessingCapture = true
         lastExportedVideoURL = nil
 
         if let sourceImage = selectedSourceImage {
-            let finalImage = WatermarkRenderer.renderWatermarkedImage(baseImage: sourceImage, store: store)
-            self.lastExportedImage = finalImage
-            WatermarkRenderer.saveToPhotoLibrary(finalImage) { _, message in
-                self.isProcessingCapture = false
-                self.showToast(message)
-                self.showPreviewExportSheet = true
-            }
+            saveAndRecordCapturedPhoto(from: sourceImage)
             return
         }
 
         if cameraService.isAuthorized && cameraService.session.isRunning {
             cameraService.capturePhoto { captured in
                 let raw = captured ?? Self.makeFallbackCanvasImage()
-                let finalImage = WatermarkRenderer.renderWatermarkedImage(baseImage: raw, store: store)
-                self.lastExportedImage = finalImage
-                WatermarkRenderer.saveToPhotoLibrary(finalImage) { _, message in
-                    self.isProcessingCapture = false
-                    self.showToast(message)
-                    self.showPreviewExportSheet = true
-                }
+                self.saveAndRecordCapturedPhoto(from: raw)
             }
         } else {
             let fallback = Self.makeFallbackCanvasImage()
-            let finalImage = WatermarkRenderer.renderWatermarkedImage(baseImage: fallback, store: store)
-            self.lastExportedImage = finalImage
-            WatermarkRenderer.saveToPhotoLibrary(finalImage) { _, message in
-                self.isProcessingCapture = false
-                self.showToast(message)
-                self.showPreviewExportSheet = true
-            }
+            saveAndRecordCapturedPhoto(from: fallback)
+        }
+    }
+
+    private func saveAndRecordCapturedPhoto(from baseImage: UIImage) {
+        let finalImage = WatermarkRenderer.renderWatermarkedImage(baseImage: baseImage, store: store)
+        self.lastExportedImage = finalImage
+
+        // 1. Lưu ngay vào Bộ sưu tập ảnh đã chụp của ứng dụng (mở từ nút "Ảnh đã chụp" trên thanh đầu)
+        let caption = "\(store.timeText) • \(store.dateText) (\(store.weekdayText)) — \(store.noteLine1)"
+        capturedStore.addCapturedPhoto(finalImage, caption: caption)
+
+        // 2. Lưu thẳng vào Thư viện Ảnh hệ thống của iPhone mà không mở hộp thoại hỏi lại
+        WatermarkRenderer.saveToPhotoLibrary(finalImage) { _, message in
+            self.isProcessingCapture = false
+            self.showToast(message)
         }
     }
 
@@ -729,7 +709,7 @@ struct ContentView: View {
         withAnimation {
             toastMessage = text
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
             withAnimation {
                 if toastMessage == text {
                     toastMessage = nil
@@ -744,74 +724,6 @@ struct ContentView: View {
         return renderer.image { ctx in
             UIColor(red: 0.12, green: 0.15, blue: 0.20, alpha: 1.0).setFill()
             ctx.fill(CGRect(origin: .zero, size: size))
-        }
-    }
-}
-
-/// Màn hình xem trước Ảnh hoặc Video vừa đóng dấu xong
-struct ExportedMediaPreviewSheet: View {
-    let image: UIImage?
-    let videoURL: URL?
-    let onSaveAgain: () -> Void
-    let onShare: () -> Void
-    @Environment(\.presentationMode) private var presentationMode
-
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 16) {
-                if let url = videoURL {
-                    VideoPlayer(player: AVPlayer(url: url))
-                        .frame(maxHeight: 480)
-                        .cornerRadius(12)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                } else if let img = image {
-                    Image(uiImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                }
-
-                Text(videoURL != nil
-                     ? "Video đã đóng dấu thời gian và tự động lưu vào Thư viện Ảnh trên iPhone."
-                     : "Ảnh đã đóng dấu thời gian và tự động lưu vào Thư viện Ảnh trên iPhone.")
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-
-                HStack(spacing: 14) {
-                    Button(action: onSaveAgain) {
-                        Label("Lưu thêm bản nữa", systemImage: "square.and.arrow.down")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button(action: onShare) {
-                        Label("Chia sẻ (Zalo / Tin nhắn)", systemImage: "square.and.arrow.up")
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-            }
-            .navigationTitle(videoURL != nil ? "Video đã đóng dấu" : "Ảnh đã đóng dấu")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Đóng") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
         }
     }
 }

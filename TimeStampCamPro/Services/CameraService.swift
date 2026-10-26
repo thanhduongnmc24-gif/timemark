@@ -58,7 +58,7 @@ final class CameraService: NSObject, ObservableObject {
         default:
             DispatchQueue.main.async {
                 self.isAuthorized = false
-                self.cameraErrorMessage = "Chưa cấp quyền Camera. Bạn vẫn có thể chọn ảnh từ mục 'Có sẵn' hoặc 'Tệp' bên dưới."
+                self.cameraErrorMessage = "Chưa cấp quyền Camera. Bạn vẫn có thể chọn ảnh từ mục 'Có sẵn' bên dưới."
             }
         }
     }
