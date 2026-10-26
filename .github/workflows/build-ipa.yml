@@ -1,4 +1,4 @@
-name: Build Unsigned iOS IPA
+name: Tao IPA va Release
 
 on:
   push:
@@ -7,48 +7,42 @@ on:
       - master
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-unsigned-ipa:
-    name: Build TimeStampCamPro Unsigned IPA
-    runs-on: macos-14
+  tao-ipa-va-release:
+    name: tao-ipa-va-release
+    runs-on: macos-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Checkout Source Code
+      - name: Tai ma nguon
         uses: actions/checkout@v4
 
-      - name: Select Xcode Version
-        run: |
-          if [ -d "/Applications/Xcode_16.2.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
-          elif [ -d "/Applications/Xcode_16.0.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.0.app/Contents/Developer
-          else
-            sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-          fi
-          xcodebuild -version
-
-      - name: Install XcodeGen
+      - name: Cai XcodeGen
         run: |
           if ! command -v xcodegen &> /dev/null; then
             brew install xcodegen
           fi
 
-      - name: Generate Xcode Project from project.yml
+      - name: Chuan hoa icon ung dung
+        run: |
+          echo "Kiem tra bo icon ung dung va tai nguyen..."
+          ls -la TimeStampCamPro/Resources/Assets.xcassets/AppIcon.appiconset/
+          ls -la TimeStampCamPro/Resources/Assets.xcassets/HoaPhatLogo.imageset/
+
+      - name: Tao Xcode project
         run: |
           xcodegen generate
-          sed -i '' 's/objectVersion = 77;/objectVersion = 56;/g' TimeStampCamPro.xcodeproj/project.pbxproj
-          sed -i '' 's/preferredProjectObjectVersion = 77;/preferredProjectObjectVersion = 56;/g' TimeStampCamPro.xcodeproj/project.pbxproj
+          if [ -f "TimeStampCamPro.xcodeproj/project.pbxproj" ]; then
+            sed -i '' 's/objectVersion = 77;/objectVersion = 56;/g' TimeStampCamPro.xcodeproj/project.pbxproj || true
+            sed -i '' 's/preferredProjectObjectVersion = 77;/preferredProjectObjectVersion = 56;/g' TimeStampCamPro.xcodeproj/project.pbxproj || true
+          fi
 
-      - name: Build Unsigned .app (Release - iphoneos)
+      - name: Build ung dung
         run: |
           xcodebuild clean build \
             -project TimeStampCamPro.xcodeproj \
@@ -58,46 +52,43 @@ jobs:
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO
 
-      - name: Fake-Sign with ldid (Optional for TrollStore / Sideloadly / ESign compatibility)
+      - name: Dong goi IPA
         run: |
-          if ! command -v ldid &> /dev/null; then
-            brew install ldid
-          fi
-          APP_PATH="build/Build/Products/Release-iphoneos/TimeStampCamPro.app"
-          ldid -STimeStampCamPro/TimeStampCamPro.entitlements "$APP_PATH/TimeStampCamPro" || true
-
-      - name: Package into Unsigned IPA
-        run: |
+          rm -rf Payload TimeStampCamPro.ipa
           mkdir -p Payload
           cp -R "build/Build/Products/Release-iphoneos/TimeStampCamPro.app" Payload/
-          zip -r9 TimeStampCamPro-Unsigned.ipa Payload
+          zip -r9 TimeStampCamPro.ipa Payload
           rm -rf Payload
-          ls -lh TimeStampCamPro-Unsigned.ipa
+          ls -lh TimeStampCamPro.ipa
 
-      - name: Upload Unsigned IPA Artifact
+      - name: Tao thong tin phien ban
+        id: version_info
+        run: |
+          echo "TAG_NAME=v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+          echo "RELEASE_TITLE=TimeStampCam Pro v1.0.${GITHUB_RUN_NUMBER}" >> $GITHUB_OUTPUT
+
+      - name: Luu IPA vao Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TimeStampCamPro-Unsigned-IPA
-          path: TimeStampCamPro-Unsigned.ipa
+          name: TimeStampCamPro-IPA
+          path: TimeStampCamPro.ipa
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish Unsigned IPA to GitHub Releases
+      - name: Tao Release va tai IPA len
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: "TimeStampCam Pro v1.0.${{ github.run_number }} (Unsigned IPA)"
+          tag_name: ${{ steps.version_info.outputs.TAG_NAME }}
+          name: ${{ steps.version_info.outputs.RELEASE_TITLE }}
           body: |
-            ### TimeStampCam Pro v1.0 - Bản Build Tự Động #${{ github.run_number }}
-            - **File cài đặt:** `TimeStampCamPro-Unsigned.ipa` (Cài qua TrollStore, ESign, Feather, Sideloadly, AltStore)
-            - **Tính năng chính:**
-              1. **Chụp hình trực tiếp hoặc Chọn ảnh có sẵn (Thư viện / Tệp):** Tự động gắn khung đóng dấu thời gian (Timemark) chuẩn xác lên ảnh chụp trực tiếp hoặc bất kỳ ảnh nào có sẵn trong máy.
-              2. **Bản mẫu Hòa Phát Gang Thép & Tùy chỉnh đa năng:** Tích hợp sẵn logo `HÒA PHÁT GANG THÉP`, giờ lớn (`21:55`), thanh dọc cam, ngày tháng (`26/10/2026`), thứ trong tuần (`Thứ Hai`) và khung mờ ghi chú tổ/kíp (`Tổ Vận hành - Kíp A X.CT1`).
-              3. **Tự điền thời gian bất kỳ hoặc Thời gian thực:** Cho phép giữ thời gian thực tự động nhảy hoặc tự nhập/chọn giờ, ngày, thứ, tọa độ/địa điểm và tải logo riêng từ máy.
-          files: TimeStampCamPro-Unsigned.ipa
+            ### TimeStampCam Pro - Ban Build Tu Dong #${{ github.run_number }}
+            - **File cai dat:** `TimeStampCamPro.ipa` (Cai qua TrollStore, ESign, Feather, Sideloadly, AltStore)
+            - **Tinh nang:** Chup anh truc tiep hoac chon anh co san (Thu vien / Tep), dong dau thoi gian, ngay thang, thu, khung ghi chu To van hanh / Kip truc va logo Hoa Phat Gang Thep.
+          files: TimeStampCamPro.ipa
           draft: false
           prerelease: false
           make_latest: "true"
