@@ -1,16 +1,15 @@
 import SwiftUI
 
 /// Khung hiển thị biểu mẫu (Watermark) trực tiếp trên màn hình:
-/// - Hỗ trợ **chụm 2 ngón tay (Pinch)** để phóng to / thu nhỏ biểu mẫu
-/// - Hỗ trợ **nhấn giữ và kéo (Drag)** để di chuyển biểu mẫu tới bất kỳ vị trí nào trên màn hình
+/// Sử dụng `@GestureState` để kéo & chụm phóng to mượt 120Hz không gây tái tạo View thừa
 struct WatermarkOverlayView: View {
     @EnvironmentObject var store: WatermarkStore
     let containerSize: CGSize
     let onTapEdit: () -> Void
     let onTapLocation: () -> Void
 
-    @State private var activeDragTranslation: CGSize = .zero
-    @State private var activePinchScale: CGFloat = 1.0
+    @GestureState private var activeDragTranslation: CGSize = .zero
+    @GestureState private var activePinchScale: CGFloat = 1.0
 
     private var effectiveScale: Double {
         let combined = store.watermarkScale * Double(activePinchScale)
@@ -26,9 +25,8 @@ struct WatermarkOverlayView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             HStack(alignment: .bottom, spacing: 8) {
-                // KHỐI BIỂU MẪU (Logo Hòa Phát + Giờ 22:26 + Vạch cam + 26/10/2026 + Thứ Hai + Khung mờ Kíp vận hành)
                 VStack(alignment: .leading, spacing: 5 * effectiveScale) {
-                    // 1. Logo Hòa Phát Gang Thép (đã xóa nền + viền trắng chuẩn mẫu)
+                    // 1. Logo Hòa Phát Gang Thép (đã cache sẵn trong RAM)
                     if store.showLogo {
                         logoView
                     }
@@ -60,7 +58,7 @@ struct WatermarkOverlayView: View {
                         }
                     }
 
-                    // 3. Khung mờ chứa các dòng ghi chú đang bật (Tổ Vận hành - Kíp A X.CT1, văn bản thêm, tọa độ...)
+                    // 3. Khung mờ chứa các dòng ghi chú đang bật
                     let lines = store.activeNoteLines
                     if !lines.isEmpty {
                         VStack(alignment: .leading, spacing: 3.5 * effectiveScale) {
@@ -94,8 +92,8 @@ struct WatermarkOverlayView: View {
                 .gesture(
                     SimultaneousGesture(
                         DragGesture()
-                            .onChanged { value in
-                                activeDragTranslation = value.translation
+                            .updating($activeDragTranslation) { value, state, _ in
+                                state = value.translation
                             }
                             .onEnded { value in
                                 let w = max(containerSize.width, 1)
@@ -104,16 +102,14 @@ struct WatermarkOverlayView: View {
                                 let newNormY = store.normalizedOffsetY + Double(value.translation.height / h)
                                 store.normalizedOffsetX = max(-0.45, min(0.65, newNormX))
                                 store.normalizedOffsetY = max(-0.75, min(0.20, newNormY))
-                                activeDragTranslation = .zero
                             },
                         MagnificationGesture()
-                            .onChanged { scale in
-                                activePinchScale = scale
+                            .updating($activePinchScale) { scale, state, _ in
+                                state = scale
                             }
                             .onEnded { scale in
                                 let updated = store.watermarkScale * Double(scale)
                                 store.watermarkScale = max(0.5, min(updated, 2.2))
-                                activePinchScale = 1.0
                             }
                     )
                 )
@@ -160,7 +156,7 @@ struct WatermarkOverlayView: View {
     private var logoView: some View {
         switch store.logoStyle {
         case .hoaPhat:
-            if let uiImage = UIImage(named: "HoaPhatLogo") {
+            if let uiImage = WatermarkStore.hoaPhatAssetLogo {
                 Image(uiImage: uiImage)
                     .resizable()
                     .scaledToFit()

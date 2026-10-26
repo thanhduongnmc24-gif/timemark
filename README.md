@@ -1,32 +1,32 @@
 # TimeStampCam Pro (iOS) — Ứng Dụng Chụp Ảnh & Chọn Ảnh Đóng Dấu Thời Gian (Timemark Hòa Phát)
 
-Dự án ứng dụng iOS viết bằng **SwiftUI + AVFoundation + CoreGraphics** được thiết kế theo đúng chuẩn quy trình **XcodeGen + GitHub Actions** như repo mẫu của bạn: không cần máy Mac cá nhân, chỉ cần đẩy code lên GitHub là Action tự động sinh `TimeStampCamPro.xcodeproj`, biên dịch bản `Release` không ký (`CODE_SIGNING_ALLOWED=NO`), gắn fake-sign bằng `ldid` và đóng gói thành **`TimeStampCamPro-Unsigned.ipa`** để bạn tải về cài qua **TrollStore, ESign, Feather, Sideloadly hoặc AltStore**.
+Dự án ứng dụng iOS viết bằng **SwiftUI + AVFoundation + CoreGraphics** được thiết kế theo đúng chuẩn quy trình **XcodeGen + GitHub Actions**: không cần máy Mac cá nhân, chỉ cần đẩy code lên GitHub là Action tự động sinh `TimeStampCamPro.xcodeproj`, biên dịch bản `Release` không ký (`CODE_SIGNING_ALLOWED=NO`) và đóng gói thành **`TimeStampCamPro.ipa`** để bạn tải về cài qua **TrollStore, ESign, Feather, Sideloadly hoặc AltStore**.
 
 ---
 
-## Tính năng chính (Thiết kế giống hệt ảnh mẫu đính kèm)
+## Tính năng chính
 
-1. **Hỗ trợ cả 2 chế độ: Chụp hình trực tiếp hoặc Tự chọn ảnh có sẵn**:
-   - **Chụp trực tiếp bằng Camera**: Hỗ trợ chuyển đổi Camera trước/sau, bật/tắt đèn Flash, và cột nút chọn mức thu phóng (`10`, `2`, `1x`, `0.5`) ở cạnh phải màn hình.
-   - **Chọn ảnh từ Thư viện (`Có sẵn`) hoặc Ứng dụng Tệp (`Tệp`)**: Cho phép chọn bất kỳ bức ảnh nào đã chụp trước đó trong máy, hỗ trợ phóng to/thu nhỏ/kéo căn chỉnh khung hình rồi đóng dấu thời gian và lưu thành ảnh mới.
+1. **Chụp ảnh lưu thẳng vào Thư viện (Không hiện bảng hỏi lại)**:
+   - Ngay khi bấm nút Chụp (hoặc bấm Lưu khi chọn ảnh từ mục `Có sẵn`), ảnh đã đóng dấu thời gian được **lưu thẳng vào Thư viện Ảnh iPhone** và **Bộ sưu tập trong ứng dụng** kèm thông báo nhanh, không bật hộp thoại hỏi xác nhận lại.
 
-2. **Khung đóng dấu thời gian (Watermark) chuẩn mẫu `HÒA PHÁT GANG THÉP`**:
+2. **Nút `"Ảnh đã chụp"` trên thanh đầu ứng dụng — Chọn nhiều ảnh & Chia sẻ qua Zalo, Facebook...**:
+   - Nằm ngay trên thanh công cụ phía trên cùng (giữa nút Đèn Flash và nút Đổi Camera), hiển thị ảnh thu nhỏ vừa chụp cùng số lượng ảnh.
+   - Mở danh sách toàn bộ ảnh đã được chụp bằng ứng dụng này, hỗ trợ **chạm để chọn nhiều ảnh cùng lúc** (hoặc **Chọn tất cả**) và bấm **Chia sẻ** để gửi hàng loạt qua **Zalo, Facebook, Messenger, AirDrop, Tin nhắn...**
+
+3. **Thanh công cụ dưới cùng gọn gàng**:
+   - Gồm 3 nút cân đối: **`Có sẵn`** (chọn ảnh từ Thư viện máy), **Nút Chụp / Quay Video** ở chính giữa, và **`Bản mẫu`** (mở bảng trượt chỉnh sửa mẫu) ở bên phải (đã lược bỏ nút `Tệp`).
+
+4. **Khung đóng dấu thời gian (Watermark) chuẩn mẫu `HÒA PHÁT GANG THÉP`**:
    - **Logo phía trên giờ**: Tích hợp sẵn logo **`HOA PHAT GANG THÉP`** sắc nét (viền trắng chữ xanh chuẩn mẫu), đồng thời cho phép đổi sang **Logo chữ tùy chỉnh** hoặc **tải ảnh Logo PNG bất kỳ** từ máy.
    - **Giờ lớn + Vạch dọc màu cam + Ngày tháng & Thứ**: Hiển thị đúng phông chữ cao đậm (`21:55`), vạch dọc màu cam ngăn cách, bên phải là ngày tháng (`26/10/2026`) và thứ tiếng Việt (`Thứ Hai`).
    - **Khung mờ ghi chú Tổ / Kíp vận hành**: Khung nền xám mờ bo góc bên dưới hiển thị nội dung công việc (mặc định: `Tổ Vận hành - Kíp A X.CT1`), có sẵn danh sách chọn nhanh 1 chạm giữa Kíp A, Kíp B, Kíp C, Kíp D hoặc tự gõ nội dung mới.
-
-3. **Tự điền thời gian bất kỳ hoặc Chạy theo giờ thực tế**:
-   - Chạm vào **biểu tượng cây bút (`square.and.pencil`)** bên phải hoặc chạm trực tiếp vào khung giờ để mở bảng chỉnh sửa:
-     - Chọn nhanh ngày/giờ trên lịch hoặc **tự gõ giờ, ngày tháng, thứ bất kỳ** theo ý muốn.
-     - Hoặc bật công tắc **"Tự động chạy theo giờ thực tế"** để đồng hồ tự nhảy theo thời gian thực.
-   - Chạm vào **biểu tượng tâm ngắm định vị** bên dưới cây bút để tự động lấy địa chỉ / tọa độ GPS hiện tại gắn vào khung ghi chú.
 
 ---
 
 ## Cấu trúc thư mục dự án
 
 ```text
-TimeStampCamPro/
+TimeMark/
 ├── .github/
 │   └── workflows/
 │       └── build-ipa.yml                  # GitHub Actions tự động build và xuất file .ipa
@@ -39,38 +39,18 @@ TimeStampCamPro/
 │   │   └── WatermarkConfig.swift          # Quản lý dữ liệu giờ, ngày, thứ, kíp trực, bản mẫu
 │   ├── Services/
 │   │   ├── CameraService.swift            # Quản lý AVCaptureSession, Flash, Zoom 0.5x/1x/2x/10x
+│   │   ├── CapturedPhotoStore.swift       # Quản lý & lưu trữ danh sách các ảnh chụp bởi ứng dụng
 │   │   ├── LocationService.swift          # Quản lý GPS & địa chỉ tự động
 │   │   └── WatermarkRenderer.swift        # Vẽ trực tiếp logo + giờ + khung ghi chú lên ảnh gốc
 │   ├── Views/
-│   │   ├── ContentView.swift              # Giao diện chính giống hệt ảnh chụp màn hình
+│   │   ├── ContentView.swift              # Giao diện chính với nút "Ảnh đã chụp" trên thanh đầu
+│   │   ├── AppPhotoGallerySheet.swift     # Bộ sưu tập ảnh đã chụp (chọn nhiều ảnh & chia sẻ Zalo/FB)
 │   │   ├── WatermarkOverlayView.swift     # Khung hiển thị trực tiếp Logo + Giờ + Kíp trực
 │   │   ├── EditWatermarkSheet.swift       # Bảng chỉnh sửa ngày giờ, kíp trực, logo
 │   │   ├── TemplatePickerSheet.swift      # Bảng quản lý & chuyển đổi Bản mẫu (Presets)
-│   │   └── ImagePickers.swift             # Bộ chọn ảnh Thư viện ("Có sẵn"), "Tệp" & Chia sẻ
+│   │   └── ImagePickers.swift             # Bộ chọn ảnh Thư viện ("Có sẵn") & Chia sẻ hệ thống
 │   └── Resources/
 │       └── Assets.xcassets/               # Bộ AppIcon đầy đủ kích thước & Logo Hòa Phát Gang Thép
 └── scripts/
     └── package_ipa.sh                     # Script đóng gói IPA nhanh nếu chạy trên máy Mac
 ```
-
----
-
-## Hướng dẫn đưa lên GitHub để xuất file `.ipa` tự động
-
-### Bước 1: Giải nén và đẩy code lên GitHub Repository mới
-Giải nén file `TimeStampCamPro-iOS-Swift-IPA.zip`, mở Terminal (hoặc VS Code) tại thư mục dự án và chạy:
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: TimeStampCam Pro iOS Swift"
-git branch -M main
-git remote add origin https://github.com/<TEN_GITHUB_CUA_BAN>/<TEN_REPO_MOI>.git
-git push -u origin main
-```
-
-### Bước 2: Tải file `TimeStampCamPro-Unsigned.ipa` từ GitHub Actions
-1. Mở kho lưu trữ (Repository) vừa tạo trên GitHub, chuyển sang tab **Actions**.
-2. Chọn workflow **Build Unsigned iOS IPA** (tự động chạy ngay khi bạn `git push`, hoặc bạn có thể bấm **Run workflow**).
-3. Chờ khoảng 2–3 phút để máy chủ `macos-14` cài đặt `XcodeGen`, biên dịch ứng dụng và đóng gói `.ipa`.
-4. Tải file **`TimeStampCamPro-Unsigned.ipa`** tại mục **Artifacts** (hoặc trong mục **Releases** của repo) và cài vào iPhone qua **TrollStore, ESign, Feather, Sideloadly hoặc AltStore**.
